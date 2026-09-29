@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Central de Confiabilidade · Painel D2</title>
+<meta name="description" content="Sala de controle de uma frota de 100 motores: quem parar esta semana, quem ainda aguenta, e quanto de vida útil se aproveita prevendo o fim de cada um.">
+<meta property="og:title" content="Central de Confiabilidade — quem parar esta semana?">
+<meta property="og:description" content="Painel interativo com 100 motores da NASA: rebobine a operação e veja a manutenção preditiva decidindo, ciclo a ciclo.">
+<meta property="og:image" content="https://goveiadev.github.io/d2-vida-util-motores/painel/og.png">
+<meta property="og:type" content="website">
+<style>
+  @font-face { font-family: 'Manrope'; src: url('fonts/manrope-latin.woff2') format('woff2'); font-weight: 200 800; font-display: swap; }
+  @font-face { font-family: 'Inter'; src: url('fonts/inter-latin.woff2') format('woff2'); font-weight: 300 800; font-display: swap; }
+  @font-face { font-family: 'Source Code Pro'; src: url('fonts/source-code-pro-latin.woff2') format('woff2'); font-weight: 200 900; font-display: swap; }
+
+  :root {
+    color-scheme: dark;
+    --fundo: #0f172a;
+    --cartao: rgba(255, 255, 255, 0.035);
+    --cartao-forte: rgba(255, 255, 255, 0.06);
+    --regua: rgba(255, 255, 255, 0.12);
+    --texto: #ffffff;
+    --texto-2: #94a3b8;
+    --apoio: #64748b;
+    --acao: #1d4ed8;
+    --acao-clara: #60a5fa;
+    --metrica: #22d3ee;
+    /* status — com rótulo escrito em todo lugar, nunca só a cor */
+    --saudavel: #475569;
+    --atencao: #22d3ee;
+    --alerta: #ef4444;
+    --r: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--fundo); color: var(--texto); font-family: 'Inter', system-ui, sans-serif; font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+  button, select { font: inherit; color: inherit; }
+  .mono { font-family: 'Source Code Pro', ui-monospace, monospace; }
+  .rotulo { font-family: 'Source Code Pro', monospace; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--apoio); }
+
+  .tela { max-width: 1480px; margin: 0 auto; padding: 18px 20px 28px; display: grid; gap: 14px;
+          grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  @media (max-width: 720px) { .tela { padding: 12px 12px 24px; gap: 12px; } }
+  .cartao { background: var(--cartao); border: 1px solid var(--regua); border-radius: var(--r); padding: 14px 16px; min-width: 0; }
+  .cartao h2 { font-family: 'Manrope', sans-serif; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+  .cartao .sub { color: var(--texto-2); font-size: 12.5px; margin-top: 2px; }
+  .topo-cartao { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+
+  /* ── Cabeçalho + linha do tempo ─────────────────────────── */
+  .cabecalho { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 16px; align-items: center; }
+  @media (max-width: 980px) { .cabecalho { grid-template-columns: 1fr; } }
+  h1 { font-family: 'Manrope', sans-serif; font-weight: 800; font-size: clamp(22px, 2.4vw, 30px); letter-spacing: -0.03em; line-height: 1.1; margin-top: 6px; }
+  .lead { color: var(--texto-2); margin-top: 6px; max-width: 620px; }
+  .tempo { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 14px; }
+  .botao { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 38px; min-width: 38px; padding: 0 12px;
+           border-radius: 10px; border: 1px solid var(--regua); background: var(--cartao-forte); cursor: pointer; }
+  .botao:hover { border-color: var(--acao-clara); }
+  .botao:focus-visible, .tile:focus-visible, .chip:focus-visible, select:focus-visible { outline: 2px solid var(--metrica); outline-offset: 2px; }
+  .botao.primario { background: var(--acao); border-color: var(--acao); font-weight: 600; }
+  .relogio { text-align: right; }
+  .relogio .n { font-family: 'Manrope', sans-serif; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+  .relogio .t { font-size: 11px; color: var(--apoio); }
+  input[type=range] { width: 100%; accent-color: var(--metrica); height: 26px; cursor: pointer; }
+  .regua-tempo { display: flex; justify-content: space-between; font-size: 11px; color: var(--apoio); }
+  .velocidade { display: flex; gap: 6px; align-items: center; color: var(--texto-2); font-size: 12px; }
+
+  /* ── Indicadores ────────────────────────────────────────── */
+  .kpis { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 520px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .kpi .v { font-family: 'Manrope', sans-serif; font-size: clamp(24px, 2.4vw, 32px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; margin-top: 6px; }
+  .kpi .d { color: var(--texto-2); font-size: 12px; margin-top: 2px; }
+  .kpi .marca { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 1px; }
+  .kpi.destaque { background: rgba(34, 211, 238, 0.07); border-color: rgba(34, 211, 238, 0.35); }
+  .kpi.destaque .v { color: var(--metrica); }
+  .kpi .comparar { color: var(--texto-2); font-size: 12px; margin-top: 2px; }
+  .kpi .comparar b { color: var(--texto); }
+
+  /* ── Frota ──────────────────────────────────────────────── */
+  .frota { grid-column: 1 / span 8; }
+  .fila { grid-column: 9 / -1; display: flex; flex-direction: column; }
+  @media (max-width: 980px) { .frota, .fila { grid-column: 1 / -1; } }
+  .filtros { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--regua); background: transparent; cursor: pointer; font-size: 12.5px; color: var(--texto-2); }
+  .chip[aria-pressed="true"] { background: var(--cartao-forte); color: var(--texto); border-color: rgba(255,255,255,.35); }
+  .chip .n { font-family: 'Source Code Pro', monospace; color: var(--texto); }
+  .ponto { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex: none; }
+  .grade { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+  .tile { position: relative; aspect-ratio: 1.35; border-radius: 8px; border: 1px solid transparent; cursor: pointer;
+          display: flex; flex-direction: column; justify-content: space-between; padding: 6px 7px; text-align: left; background: var(--saudavel);
+          transition: opacity .15s, transform .15s; overflow: hidden; }
+  .tile:hover { transform: translateY(-1px); }
+  .tile .id { font-family: 'Source Code Pro', monospace; font-size: 11px; font-weight: 600; color: rgba(255,255,255,.85); }
+  .tile .val { font-family: 'Manrope', sans-serif; font-weight: 800; font-size: clamp(11px, 1.15vw, 15px); line-height: 1; letter-spacing: -0.02em; }
+  .tile.atencao { background: rgba(34, 211, 238, 0.22); border-color: var(--atencao); }
+  .tile.atencao .val { color: var(--atencao); }
+  .tile.alerta { background: rgba(239, 68, 68, 0.22); border-color: var(--alerta); }
+  .tile.alerta .val { color: #fca5a5; }
+  .tile.retirado { background: transparent; border: 1px dashed rgba(255,255,255,.22); }
+  .tile.retirado .id, .tile.retirado .val { color: var(--apoio); }
+  .tile.selecionado { outline: 2px solid #fff; outline-offset: 1px; }
+  .tile.apagado { opacity: .18; }
+  @media (max-width: 720px) { .grade { gap: 4px; } .tile { padding: 3px 4px; border-radius: 6px; } .tile .id { font-size: 9px; } .tile .val { font-size: 10px; } }
+  /* No celular, só o valor: o número do motor aparece no detalhe ao tocar. */
+  @media (max-width: 520px) { .tile { aspect-ratio: 1; justify-content: center; align-items: center; padding: 2px; } .tile .id { display: none; } .tile .val { font-size: 11px; text-align: center; } }
+  .legenda { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; color: var(--texto-2); font-size: 12px; }
+  .legenda span { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* A lista ocupa a altura que sobra no cartão (a linha da grade é definida pela
+     frota) e rola por dentro. Empilhado, no celular, ganha altura própria. */
+  .lista { margin-top: 4px; overflow-y: auto; flex: 1 1 0; min-height: 0; }
+  @media (max-width: 980px) { .lista { flex: none; max-height: 340px; } }
+  .item { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; width: 100%; padding: 9px 8px; border: 0; border-bottom: 1px solid var(--regua); background: transparent; cursor: pointer; text-align: left; border-radius: 6px; }
+  .item:hover, .item.selecionado { background: var(--cartao-forte); }
+  .item .id { font-family: 'Source Code Pro', monospace; font-weight: 600; }
+  .item .acao { font-size: 12.5px; color: var(--texto-2); }
+  .item .acao b { color: var(--texto); font-weight: 600; }
+  .item .prazo { font-family: 'Manrope', sans-serif; font-weight: 800; font-size: 16px; text-align: right; }
+  .item .prazo small { display: block; font-family: 'Inter', sans-serif; font-size: 10.5px; font-weight: 400; color: var(--apoio); }
+  .vazio { color: var(--texto-2); padding: 18px 4px; }
+
+  /* ── Detalhe ────────────────────────────────────────────── */
+  .detalhe { grid-column: 1 / span 8; }
+  .sensor { grid-column: 9 / -1; }
+  @media (max-width: 980px) { .detalhe, .sensor { grid-column: 1 / -1; } }
+  .ficha { display: flex; gap: 18px; flex-wrap: wrap; margin: 2px 0 6px; }
+  .ficha div { font-size: 12px; color: var(--texto-2); }
+  .ficha b { display: block; font-family: 'Manrope', sans-serif; font-size: 18px; color: var(--texto); font-weight: 800; letter-spacing: -0.02em; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .eixo { font-family: 'Source Code Pro', monospace; font-size: 10.5px; fill: var(--apoio); }
+  .grade-linha { stroke: rgba(255,255,255,.08); stroke-width: 1; }
+  select { background: var(--cartao-forte); border: 1px solid var(--regua); border-radius: 8px; padding: 6px 8px; font-size: 12.5px; max-width: 100%; }
+  .grafico { position: relative; }
+  .dica { position: fixed; pointer-events: none; background: #020617; border: 1px solid var(--regua); color: #fff; font-size: 12px; line-height: 1.45;
+          padding: 8px 10px; border-radius: 8px; opacity: 0; transition: opacity .1s; z-index: 20; max-width: 260px; }
+
+  .rodape { grid-column: 1 / -1; color: var(--apoio); font-size: 12px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-top: 4px; }
+  .rodape a { color: var(--texto-2); }
+  details.metodo { grid-column: 1 / -1; color: var(--texto-2); font-size: 13px; }
+  details.metodo summary { cursor: pointer; color: var(--texto); font-weight: 600; }
+  details.metodo ul { margin: 10px 0 0 18px; }
+  details.metodo li { margin-bottom: 6px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main class="tela">
+
+  <!-- ═══ Cabeçalho e linha do tempo ═══════════════════════ -->
+  <header class="cabecalho">
+    <div>
+      <div class="rotulo">Central de Confiabilidade · manutenção preditiva</div>
+      <h1>Quais motores parar esta semana?</h1>
+      <p class="lead">Uma frota de 100 motores, cada um com a vida restante prevista a cada ciclo. Dê play e veja a operação acontecer: os alertas acendem, a parada é programada com antecedência — e, nesta frota, nenhum motor falha antes da troca.</p>
+    </div>
+    <div class="cartao tempo" role="group" aria-label="Linha do tempo da operação">
+      <button class="botao primario" id="play" aria-label="Reproduzir">▶</button>
+      <div>
+        <input type="range" id="ciclo" min="1" max="362" value="150" aria-label="Ciclo de operação">
+        <div class="regua-tempo mono"><span>ciclo 1</span><span id="velocidadeTexto"></span><span id="cicloMax">—</span></div>
+      </div>
+      <div class="relogio"><div class="n mono" id="cicloTexto">150</div><div class="t">ciclo de operação</div></div>
+    </div>
+  </header>
+
+  <!-- ═══ Indicadores ═══════════════════════════════════════ -->
+  <section class="kpis" aria-live="polite">
+    <div class="cartao kpi"><div class="rotulo">Em operação</div><div class="v" id="kOperacao">—</div><div class="d">de 100 motores</div></div>
+    <div class="cartao kpi"><div class="rotulo"><i class="marca" style="background:var(--alerta)"></i>Parada programada</div><div class="v" id="kAlerta">—</div><div class="d">alerta disparado, intervenção a caminho</div></div>
+    <div class="cartao kpi"><div class="rotulo"><i class="marca" style="background:var(--atencao)"></i>Em atenção</div><div class="v" id="kAtencao">—</div><div class="d" id="kAtencaoTxt">vida prevista abaixo de 80 ciclos</div></div>
+    <div class="cartao kpi"><div class="rotulo">Trocas feitas</div><div class="v" id="kTrocas">—</div><div class="d">antes de qualquer falha</div></div>
+    <div class="cartao kpi"><div class="rotulo">Falhas não previstas</div><div class="v" id="kFalhas">—</div><div class="d">motor que quebrou antes da troca</div></div>
+    <div class="cartao kpi destaque"><div class="rotulo">Vida útil aproveitada</div><div class="v" id="kVida">—</div><div class="comparar" id="kVidaComparar">—</div></div>
+  </section>
+
+  <!-- ═══ Frota ═════════════════════════════════════════════ -->
+  <section class="cartao frota" aria-labelledby="tFrota">
+    <div class="topo-cartao">
+      <div><h2 id="tFrota">Frota</h2><div class="sub">Clique num motor para ver o detalhe. O número é a vida restante prevista, em ciclos.</div></div>
+      <div class="filtros" role="group" aria-label="Filtrar por status" id="filtros"></div>
+    </div>
+    <div class="grade" id="grade"></div>
+    <div class="legenda">
+      <span><i class="ponto" style="background:var(--saudavel)"></i>Saudável</span>
+      <span><i class="ponto" style="background:var(--atencao)"></i>Atenção — abaixo de 80 ciclos previstos</span>
+      <span><i class="ponto" style="background:var(--alerta)"></i>Parada programada — "em 12" = intervenção em 12 ciclos</span>
+      <span><i class="ponto" style="border:1px dashed rgba(255,255,255,.4)"></i>Trocado — % da vida útil aproveitada</span>
+    </div>
+  </section>
+
+  <!-- ═══ Fila de prioridade ════════════════════════════════ -->
+  <section class="cartao fila" aria-labelledby="tFila">
+    <div class="topo-cartao" style="margin-bottom:4px">
+      <div><h2 id="tFila">Fila de prioridade</h2><div class="sub">Quem parar primeiro — e quanto tempo falta para agir.</div></div>
+    </div>
+    <div class="lista" id="lista" aria-live="polite"></div>
+  </section>
+
+  <!-- ═══ Detalhe do motor ══════════════════════════════════ -->
+  <section class="cartao detalhe" aria-labelledby="tDetalhe">
+    <div class="topo-cartao" style="margin-bottom:4px">
+      <div><h2 id="tDetalhe">Motor —</h2><div class="sub">Vida restante prevista pelo modelo × a real, ciclo a ciclo.</div></div>
+    </div>
+    <div class="ficha" id="ficha"></div>
+    <div class="legenda" style="margin:0 0 8px">
+      <span><i class="ponto" style="background:#60a5fa;height:3px;width:16px;border-radius:0"></i>prevista pelo modelo</span>
+      <span><i class="ponto" style="border-top:2px dashed #94a3b8;height:0;width:16px;border-radius:0"></i>real (acima de 150, cortada)</span>
+      <span><i class="ponto" style="background:var(--metrica);width:3px;height:12px;border-radius:0"></i>ciclo atual</span>
+      <span>o gráfico termina no ciclo em que o motor falharia</span>
+    </div>
+    <div class="grafico"><svg id="svgVida" role="img" aria-label="Vida restante prevista e real do motor selecionado"></svg></div>
+  </section>
+
+  <section class="cartao sensor" aria-labelledby="tSensor">
+    <div class="topo-cartao" style="margin-bottom:6px">
+      <div><h2 id="tSensor">Sinal do sensor</h2><div class="sub" id="sensorSub">Média móvel de 10 ciclos.</div></div>
+    </div>
+    <label for="sensorSel" class="rotulo" style="display:block;margin-bottom:6px">Sensor</label>
+    <select id="sensorSel"></select>
+    <div class="grafico" style="margin-top:10px"><svg id="svgSensor" role="img" aria-label="Sinal do sensor selecionado ao longo dos ciclos"></svg></div>
+  </section>
+
+  <!-- ═══ Método ════════════════════════════════════════════ -->
+  <details class="cartao metodo">
+    <summary>Como funciona — e o que este painel não permite afirmar</summary>
+    <ul id="metodo"></ul>
+  </details>
+
+  <footer class="rodape">
+    <span>Ramon Goveia · projeto D2 do portfólio · dados NASA C-MAPSS FD001</span>
+    <span><a href="https://github.com/GoveiaDev/d2-vida-util-motores">Código, notebook e limitações</a> · <a href="https://www.linkedin.com/in/ramon-goveia-92266443">LinkedIn</a></span>
+  </footer>
+</main>
+<div class="dica" id="dica" role="tooltip"></div>
+
+<script src="dados.js"></script>
+<script>
+(() => {
+  const C = window.CENTRAL;
+  const $ = id => document.getElementById(id);
+  const fmt = (v, d = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const pct = v => fmt(100 * v) + '%';
+  const ATENCAO = 80;          // limiar de atenção, fixo e declarado na legenda
+  const MARGEM = C.margem, PRAZO = C.prazo;
+
+  // O ciclo do alarme vem do notebook, calculado sobre a previsão exata. A
+  // intervenção acontece o prazo de ação depois dele.
+  const M = C.motores.map(m => ({ ...m, intervencao: m.alerta + PRAZO }));
+  const FIM = Math.max(...M.map(m => Math.min(m.intervencao, m.vida))) + 2;
+  const nomeId = id => 'M' + String(id).padStart(3, '0');
+
+  function estado(m, t) {
+    if (t >= m.intervencao && m.intervencao < m.vida) return { s: 'retirado', aproveitado: m.intervencao / m.vida };
+    if (t >= m.vida) return { s: 'falhou' };
+    const prev = m.prev[t - 1];
+    if (t >= m.alerta) return { s: 'alerta', faltam: m.intervencao - t, prev };
+    if (prev <= ATENCAO) return { s: 'atencao', prev };
+    return { s: 'saudavel', prev };
+  }
+
+  // ── Estado da interface ──
+  let t = 150, filtro = 'todos', selecionado = null, tocando = null, velocidade = 6;
+  const slider = $('ciclo');
+  slider.max = FIM; $('cicloMax').textContent = 'ciclo ' + FIM;
+
+  const ROTULOS = { todos: 'Todos', saudavel: 'Saudável', atencao: 'Atenção', alerta: 'Parada programada', retirado: 'Trocado' };
+  const CORES = { saudavel: 'var(--saudavel)', atencao: 'var(--atencao)', alerta: 'var(--alerta)', retirado: 'transparent' };
+
+  // ── Dica flutuante ──
+  const dica = $('dica');
+  function mostrarDica(ev, html) {
+    dica.innerHTML = html; dica.style.opacity = 1;
+    const x = Math.min(ev.clientX + 14, innerWidth - dica.offsetWidth - 8);
+    const y = Math.min(ev.clientY + 14, innerHeight - dica.offsetHeight - 8);
+    dica.style.left = x + 'px'; dica.style.top = y + 'px';
+  }
+  const esconderDica = () => { dica.style.opacity = 0; };
+
+  function textoEstado(m, e) {
+    if (e.s === 'retirado') return `Trocado no ciclo ${m.intervencao} — aproveitou ${pct(e.aproveitado)} da vida útil (falharia no ciclo ${m.vida})`;
+    if (e.s === 'alerta') return `Parada programada: intervenção em ${e.faltam} ciclos. Vida prevista agora: ${e.prev} ciclos`;
+    if (e.s === 'atencao') return `Atenção: vida prevista de ${e.prev} ciclos`;
+    if (e.s === 'falhou') return `Falhou no ciclo ${m.vida}, antes da troca`;
+    return `Saudável: vida prevista de ${e.prev}${e.prev >= C.teto ? '+' : ''} ciclos`;
+  }
+
+  function desenharKpis(estados) {
+    const cont = { saudavel: 0, atencao: 0, alerta: 0, retirado: 0, falhou: 0 };
+    estados.forEach(e => cont[e.e.s]++);
+    $('kOperacao').textContent = 100 - cont.retirado - cont.falhou;
+    $('kAlerta').textContent = cont.alerta;
+    $('kAtencao').textContent = cont.atencao;
+    $('kTrocas').textContent = cont.retirado;
+    $('kFalhas').textContent = cont.falhou;
+    const trocados = estados.filter(e => e.e.s === 'retirado');
+    if (trocados.length) {
+      const usado = trocados.reduce((s, e) => s + e.m.intervencao, 0);
+      const total = trocados.reduce((s, e) => s + e.m.vida, 0);
+      $('kVida').textContent = pct(usado / total);
+      $('kVidaComparar').innerHTML = `nos ${trocados.length} trocados · troca por tempo fixo: <b>${pct(C.aproveitado_tempo)}</b>`;
+    } else {
+      $('kVida').textContent = '—';
+      $('kVidaComparar').innerHTML = `nenhum trocado ainda · troca por tempo fixo: <b>${pct(C.aproveitado_tempo)}</b>`;
+    }
+    return cont;
+  }
+
+  function desenharFiltros(cont) {
+    const opcoes = ['todos', 'saudavel', 'atencao', 'alerta', 'retirado'];
+    $('filtros').innerHTML = opcoes.map(o => {
+      const n = o === 'todos' ? 100 : cont[o];
+      const bola = o === 'todos' ? '' : `<i class="ponto" style="background:${CORES[o]};${o === 'retirado' ? 'border:1px dashed rgba(255,255,255,.45)' : ''}"></i>`;
+      return `<button class="chip" data-f="${o}" aria-pressed="${filtro === o}">${bola}${ROTULOS[o]} <span class="n">${n}</span></button>`;
+    }).join('');
+    $('filtros').querySelectorAll('.chip').forEach(b => b.onclick = () => { filtro = b.dataset.f; tudo(); });
+  }
+
+  function desenharGrade(estados) {
+    $('grade').innerHTML = estados.map(({ m, e }) => {
+      let val = '';
+      if (e.s === 'retirado') val = '✓ ' + pct(e.aproveitado);
+      else if (e.s === 'alerta') val = 'em ' + e.faltam;
+      else if (e.s === 'falhou') val = 'falhou';
+      else val = e.prev >= C.teto ? C.teto + '+' : e.prev;
+      const apagado = filtro !== 'todos' && filtro !== e.s ? ' apagado' : '';
+      const sel = selecionado === m.id ? ' selecionado' : '';
+      return `<button class="tile ${e.s}${apagado}${sel}" data-id="${m.id}" aria-label="${nomeId(m.id)}: ${textoEstado(m, e)}"><span class="id">${nomeId(m.id)}</span><span class="val">${val}</span></button>`;
+    }).join('');
+    $('grade').querySelectorAll('.tile').forEach(b => {
+      const m = M[+b.dataset.id - 1];
+      b.onclick = () => { selecionado = m.id; tudo(); };
+      b.onmousemove = ev => mostrarDica(ev, `<b>${nomeId(m.id)}</b><br>${textoEstado(m, estado(m, t))}`);
+      b.onmouseleave = esconderDica;
+    });
+  }
+
+  function desenharFila(estados) {
+    let itens = estados.filter(({ e }) => e.s === 'alerta' || e.s === 'atencao');
+    if (filtro === 'alerta' || filtro === 'atencao') itens = itens.filter(({ e }) => e.s === filtro);
+    itens.sort((a, b) => (a.e.s === 'alerta' ? 0 : 1) - (b.e.s === 'alerta' ? 0 : 1)
+      || (a.e.s === 'alerta' ? a.e.faltam - b.e.faltam : a.e.prev - b.e.prev));
+    if (!itens.length) { $('lista').innerHTML = `<div class="vazio">Nenhum motor pedindo ação no ciclo ${t}.</div>`; return; }
+    $('lista').innerHTML = itens.map(({ m, e }) => {
+      const alerta = e.s === 'alerta';
+      return `<button class="item${selecionado === m.id ? ' selecionado' : ''}" data-id="${m.id}">
+        <i class="ponto" style="background:${alerta ? 'var(--alerta)' : 'var(--atencao)'}"></i>
+        <span><span class="id">${nomeId(m.id)}</span><br><span class="acao">${alerta ? '<b>Programar parada</b>' : 'Acompanhar'} · prevista: ${e.prev} ciclos</span></span>
+        <span class="prazo" style="color:${alerta ? '#fca5a5' : 'var(--atencao)'}">${alerta ? e.faltam : e.prev}<small>${alerta ? 'ciclos p/ intervir' : 'ciclos previstos'}</small></span>
+      </button>`;
+    }).join('');
+    $('lista').querySelectorAll('.item').forEach(b => b.onclick = () => { selecionado = +b.dataset.id; tudo(); });
+  }
+
+  // Gráficos desenhados na largura real do contêiner — o texto não encolhe no celular.
+  const largura = el => Math.max(280, Math.round(el.getBoundingClientRect().width));
+
+  function desenharVida(m) {
+    const svg = $('svgVida'), W = largura(svg.parentElement), H = W < 560 ? 230 : 270;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const X0 = 38, X1 = W - 12, Y0 = 14, Y1 = H - 34, YMAX = 150;
+    const sx = c => X0 + ((c - 1) / (m.vida - 1)) * (X1 - X0);
+    const sy = v => Y1 - (Math.min(v, YMAX) / YMAX) * (Y1 - Y0);
+    let h = '';
+    for (let v = 0; v <= YMAX; v += 50) h += `<line class="grade-linha" x1="${X0}" x2="${X1}" y1="${sy(v)}" y2="${sy(v)}"/><text class="eixo" x="${X0 - 6}" y="${sy(v) + 4}" text-anchor="end">${v}</text>`;
+    const passoX = m.vida > 250 ? 50 : 25;
+    for (let c = passoX; c < m.vida; c += passoX) h += `<text class="eixo" x="${sx(c)}" y="${Y1 + 16}" text-anchor="middle">${c}</text>`;
+    h += `<text class="eixo" x="${X1}" y="${Y1 + 30}" text-anchor="end">ciclo de operação</text>`;
+    // Faixa de alerta
+    h += `<rect x="${X0}" y="${sy(MARGEM)}" width="${X1 - X0}" height="${Y1 - sy(MARGEM)}" fill="rgba(239,68,68,.07)"/>`;
+    h += `<line x1="${X0}" x2="${X1}" y1="${sy(MARGEM)}" y2="${sy(MARGEM)}" stroke="rgba(239,68,68,.6)" stroke-dasharray="4 4"/>`;
+    // Rótulo à esquerda, dentro da faixa: nessa região as curvas ainda estão no alto.
+    h += `<text class="eixo" x="${X0 + 6}" y="${sy(MARGEM) + 14}" style="fill:#fca5a5">limite de alerta · ${MARGEM} ciclos</text>`;
+    // Real (cinza) e prevista (azul)
+    let real = '', prev = '';
+    for (let c = 1; c <= m.vida; c++) {
+      real += `${c === 1 ? 'M' : 'L'}${sx(c).toFixed(1)},${sy(m.vida - c).toFixed(1)}`;
+      prev += `${c === 1 ? 'M' : 'L'}${sx(c).toFixed(1)},${sy(m.prev[c - 1]).toFixed(1)}`;
+    }
+    h += `<path d="${real}" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 3"/>`;
+    h += `<path d="${prev}" fill="none" stroke="#60a5fa" stroke-width="2"/>`;
+    // Marcos: alarme, intervenção, fim de vida
+    const marco = (c, cor, texto, y) => `<line x1="${sx(c)}" x2="${sx(c)}" y1="${Y0}" y2="${Y1}" stroke="${cor}" stroke-width="1.2"/><text class="eixo" x="${sx(c) + 4}" y="${y}" style="fill:${cor}">${texto}</text>`;
+    if (isFinite(m.alerta)) h += marco(m.alerta, '#fca5a5', 'alarme', Y0 + 10);
+    if (m.intervencao < m.vida) h += marco(m.intervencao, '#ffffff', 'troca', Y0 + 24);
+    // Ciclo atual
+    if (t <= m.vida) h += `<line x1="${sx(t)}" x2="${sx(t)}" y1="${Y0 - 6}" y2="${Y1}" stroke="var(--metrica)" stroke-width="2"/><circle cx="${sx(t)}" cy="${sy(m.prev[t - 1])}" r="4.5" fill="var(--metrica)" stroke="#0f172a" stroke-width="2"/>`;
+    // Camada de hover
+    h += `<rect id="alvoVida" x="${X0}" y="${Y0}" width="${X1 - X0}" height="${Y1 - Y0}" fill="transparent"/>`;
+    svg.innerHTML = h;
+    $('alvoVida').onmousemove = ev => {
+      const r = svg.getBoundingClientRect();
+      const c = Math.max(1, Math.min(m.vida, Math.round(1 + ((ev.clientX - r.left) * (W / r.width) - X0) / (X1 - X0) * (m.vida - 1))));
+      mostrarDica(ev, `Ciclo <b>${c}</b><br>prevista: <b>${m.prev[c - 1]}</b> ciclos<br>real: <b>${m.vida - c}</b> ciclos`);
+    };
+    $('alvoVida').onmouseleave = esconderDica;
+  }
+
+  function desenharSensor(m) {
+    const id = $('sensorSel').value, serie = m.sensores[id];
+    const svg = $('svgSensor'), W = largura(svg.parentElement), H = 200;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const X0 = 52, X1 = W - 10, Y0 = 10, Y1 = H - 28;
+    const lo = Math.min(...serie), hi = Math.max(...serie), folga = (hi - lo) * 0.08 || 1;
+    const a = lo - folga, b = hi + folga;
+    const sx = c => X0 + ((c - 1) / (m.vida - 1)) * (X1 - X0);
+    const sy = v => Y1 - ((v - a) / (b - a)) * (Y1 - Y0);
+    const casas = (b - a) < 1 ? 3 : (b - a) < 10 ? 2 : 1;
+    let h = '';
+    for (let i = 0; i <= 3; i++) { const v = a + (b - a) * i / 3; h += `<line class="grade-linha" x1="${X0}" x2="${X1}" y1="${sy(v)}" y2="${sy(v)}"/><text class="eixo" x="${X0 - 6}" y="${sy(v) + 4}" text-anchor="end">${fmt(v, casas)}</text>`; }
+    h += `<text class="eixo" x="${X1}" y="${Y1 + 18}" text-anchor="end">ciclo · até o fim de vida (${m.vida})</text>`;
+    let d = '';
+    serie.forEach((v, i) => d += `${i ? 'L' : 'M'}${sx(i + 1).toFixed(1)},${sy(v).toFixed(1)}`);
+    h += `<path d="${d}" fill="none" stroke="#60a5fa" stroke-width="1.8"/>`;
+    if (isFinite(m.alerta)) h += `<line x1="${sx(m.alerta)}" x2="${sx(m.alerta)}" y1="${Y0}" y2="${Y1}" stroke="#fca5a5" stroke-width="1"/>`;
+    if (t <= m.vida) h += `<line x1="${sx(t)}" x2="${sx(t)}" y1="${Y0}" y2="${Y1}" stroke="var(--metrica)" stroke-width="2"/><circle cx="${sx(t)}" cy="${sy(serie[t - 1])}" r="4" fill="var(--metrica)" stroke="#0f172a" stroke-width="2"/>`;
+    svg.innerHTML = h;
+    const s = C.sensores.find(x => x.id === id);
+    $('sensorSub').textContent = `Média móvel de 10 ciclos · peso no modelo: ${pct(s.importancia)}`;
+  }
+
+  function desenharDetalhe(m) {
+    const e = estado(m, t);
+    $('tDetalhe').textContent = 'Motor ' + nomeId(m.id);
+    $('ficha').innerHTML = `
+      <div>Situação no ciclo ${t}<b style="color:${e.s === 'alerta' ? '#fca5a5' : e.s === 'atencao' ? 'var(--atencao)' : '#fff'}">${ROTULOS[e.s] || 'Falhou'}</b></div>
+      <div>Alarme disparou<b>${isFinite(m.alerta) ? 'ciclo ' + m.alerta : '—'}</b></div>
+      <div>Troca programada<b>${m.intervencao < m.vida ? 'ciclo ' + m.intervencao : '—'}</b></div>
+      <div>Falharia no ciclo<b>${m.vida}</b></div>
+      <div>Vida aproveitada<b style="color:var(--metrica)">${m.intervencao < m.vida ? pct(m.intervencao / m.vida) : '—'}</b></div>`;
+    desenharVida(m);
+    desenharSensor(m);
+  }
+
+  function tudo() {
+    const estados = M.map(m => ({ m, e: estado(m, t) }));
+    const cont = desenharKpis(estados);
+    desenharFiltros(cont);
+    desenharGrade(estados);
+    desenharFila(estados);
+    if (selecionado === null) {
+      const urgente = estados.filter(x => x.e.s === 'alerta').sort((a, b) => a.e.faltam - b.e.faltam)[0];
+      selecionado = (urgente || estados[0]).m.id;
+    }
+    desenharDetalhe(M[selecionado - 1]);
+    $('cicloTexto').textContent = t;
+    slider.value = t;
+  }
+
+  // ── Controles ──
+  C.sensores.forEach(s => { const o = document.createElement('option'); o.value = s.id; o.textContent = `${s.nome} · ${pct(s.importancia)}`; $('sensorSel').appendChild(o); });
+  $('sensorSel').onchange = () => desenharSensor(M[selecionado - 1]);
+  slider.oninput = () => { t = +slider.value; tudo(); };
+
+  $('velocidadeTexto').textContent = `${velocidade} ciclos/s`;
+  $('play').title = 'Reproduzir ou pausar (barra de espaço) · setas ← → avançam um ciclo';
+  function parar() { clearInterval(tocando); tocando = null; $('play').textContent = '▶'; $('play').setAttribute('aria-label', 'Reproduzir'); }
+  $('play').onclick = () => {
+    if (tocando) return parar();
+    if (t >= FIM) t = 1;
+    $('play').textContent = '❚❚'; $('play').setAttribute('aria-label', 'Pausar');
+    tocando = setInterval(() => { t = Math.min(FIM, t + 1); tudo(); if (t >= FIM) parar(); }, 1000 / velocidade);
+  };
+  addEventListener('keydown', ev => {
+    if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT') return;
+    if (ev.key === ' ') { ev.preventDefault(); $('play').click(); }
+    if (ev.key === 'ArrowRight') { t = Math.min(FIM, t + 1); tudo(); }
+    if (ev.key === 'ArrowLeft') { t = Math.max(1, t - 1); tudo(); }
+  });
+
+  // ── Método, com os números dos dados ──
+  $('metodo').innerHTML = [
+    `<b>Dados:</b> 100 motores turbofan simulados pela NASA (C-MAPSS, subconjunto FD001), cada um rodado até a falha — de ${Math.min(...M.map(m => m.vida))} a ${Math.max(...M.map(m => m.vida))} ciclos de vida.`,
+    `<b>Previsão:</b> Random Forest sobre os 15 sensores que variam e suas médias móveis. Cada motor é previsto por um modelo que <b>nunca viu aquele motor</b> (validação cruzada separada por motor). No teste oficial da NASA, o erro típico é de ${fmt(C.rmse_teste, 1)} ciclos.`,
+    `<b>Regra de decisão:</b> o alarme dispara quando a vida prevista cai para ${MARGEM} ciclos ou menos; a troca acontece ${PRAZO} ciclos depois, o prazo para programar a parada. A margem foi calibrada para zero falhas nesses 100 motores.`,
+    `<b>Simplificação da linha do tempo:</b> todos os motores começam no ciclo 1 ao mesmo tempo. Numa frota real, cada um está numa idade diferente.`,
+    `<b>Os motores são simulados</b>, com um único modo de falha. Equipamento real tem mais ruído e vários modos de falha.`,
+    `<b>Calibração otimista:</b> a margem foi escolhida nos mesmos motores exibidos. Em motores novos, o teste de robustez do projeto mostra de 1 a 2 falhas em cada 100 — o README traz os detalhes.`,
+    `<b>Previsão limitada a ${C.teto} ciclos:</b> longe do fim, o modelo não distingue "faltam 300" de "faltam 200" — por isso os motores saudáveis aparecem como ${C.teto}+.`,
+  ].map(x => `<li>${x}</li>`).join('');
+
+  let redesenho;
+  addEventListener('resize', () => { clearTimeout(redesenho); redesenho = setTimeout(tudo, 120); });
+  tudo();
+})();
+</script>
+</body>
+</html>

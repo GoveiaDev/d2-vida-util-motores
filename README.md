@@ -4,6 +4,11 @@
 útil dos motores. Trocar quando o modelo prevê o fim de cada um aproveita 89% —
 mesmo com 20 ciclos de prazo para programar a parada.**
 
+**[→ Abrir a Central de Confiabilidade](https://goveiadev.github.io/d2-vida-util-motores/painel/)** —
+painel interativo com os 100 motores: dê play e veja a operação acontecer ciclo a
+ciclo, com a fila de quem parar primeiro e a vida restante prevista × a real de cada
+motor.
+
 ![Capa do projeto](capa.png)
 
 ## A pergunta
@@ -109,6 +114,19 @@ para a pasta `dados/` e rode:
 
 O notebook [`analise.ipynb`](analise.ipynb) já está salvo com as saídas executadas —
 dá para ler sem rodar nada. A semente aleatória é fixa (42).
+
+**O painel** (`painel/`) é HTML estático, sem dependências externas. A execução do
+notebook regrava `painel/dados.js` com a previsão de cada motor a cada ciclo (feita
+por um modelo que nunca viu aquele motor) e o ciclo do alarme de cada um; o painel
+reproduz a operação a partir desses dados. Para abrir localmente:
+
+```bash
+python -m http.server 8000
+# e abra http://localhost:8000/painel/
+```
+
+Uma simplificação do painel, dita também na tela: todos os motores começam no ciclo 1
+ao mesmo tempo. Numa frota real, cada um está numa idade diferente.
 
 ---
 
