@@ -1,0 +1,6 @@
+# O dataset é baixado da fonte oficial (ver "Como rodar" no README),
+# não redistribuído aqui.
+dados/
+post-linkedin.md
+post-linkedin-colar.txt
+.ipynb_checkpoints/
